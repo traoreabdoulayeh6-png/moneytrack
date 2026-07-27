@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MoneyTrack — Gestion de Depenses</title>
+  <meta name="description" content="MoneyTrack : application moderne de gestion de depenses personnelles">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- PWA : installation en tant qu'application -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0A1628">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MoneyTrack">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+
+  <!-- LOADER -->
+  <div id="loader">
+    <div class="loader-spinner"></div>
+    <div class="loader-text">MoneyTrack</div>
+  </div>
+
+  <!-- NAVBAR -->
+  <nav role="navigation" aria-label="Navigation principale">
+    <div class="nav-inner">
+      <div class="nav-brand">
+        <div class="nav-logo" aria-hidden="true"><i class="fa-solid fa-wallet"></i></div>
+        <div class="nav-title">Money<span>Track</span></div>
+      </div>
+      <div class="nav-links">
+        <button class="nav-btn active" data-page="accueil" aria-label="Accueil">
+          <i class="fa-solid fa-house"></i> Accueil
+        </button>
+        <button class="nav-btn" data-page="apropos" aria-label="A propos">
+          <i class="fa-solid fa-circle-info"></i> A propos
+        </button>
+        <button class="nav-btn" data-page="contact" aria-label="Contact">
+          <i class="fa-solid fa-envelope"></i> Contact
+        </button>
+        <button class="nav-btn" id="darkModeBtn" aria-label="Basculer le mode sombre">
+          <i class="fa-solid fa-moon"></i>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- NOTIFICATIONS -->
+  <div id="notifications" aria-live="polite"></div>
+
+  <!-- MODAL EDITION -->
+  <div class="modal-overlay" id="editModal" role="dialog" aria-modal="true" aria-label="Modifier la depense">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fa-solid fa-pen-to-square" style="color:var(--accent)"></i> Modifier la depense</h3>
+        <button class="modal-close" onclick="closeEditModal()" aria-label="Fermer"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="editForm" novalidate>
+        <input type="hidden" id="editId">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="editTitre">Titre *</label>
+            <input type="text" id="editTitre" placeholder="Ex: Courses hebdomadaires" required>
+            <span class="form-error" id="editTitreError"></span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="editMontant">Montant (FCFA) *</label>
+            <input type="number" id="editMontant" step="1" min="0" placeholder="0" required>
+            <span class="form-error" id="editMontantError"></span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="editCategorie">Categorie *</label>
+            <select id="editCategorie" required>
+              <option value="">Choisir une categorie</option>
+            </select>
+            <span class="form-error" id="editCategorieError"></span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="editDate">Date *</label>
+            <input type="date" id="editDate" required>
+            <span class="form-error" id="editDateError"></span>
+          </div>
+          <div class="form-group full">
+            <label class="form-label" for="editDescription">Description (facultatif)</label>
+            <textarea id="editDescription" rows="2" placeholder="Details supplementaires..."></textarea>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeEditModal()">Annuler</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL CONFIRMATION SUPPRESSION -->
+  <div class="modal-overlay" id="confirmModal" role="dialog" aria-modal="true" aria-label="Confirmation de suppression">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i> Confirmer la suppression</h3>
+        <button class="modal-close" onclick="closeConfirmModal()" aria-label="Fermer"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <p class="confirm-text">Voulez-vous vraiment supprimer la depense :</p>
+      <p class="confirm-text"><span class="confirm-name" id="confirmName"></span></p>
+      <p class="confirm-text" style="font-size:0.85rem;color:var(--text-muted)">Cette action est irreversible.</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeConfirmModal()">Annuler</button>
+        <button class="btn btn-danger" id="confirmDeleteBtn"><i class="fa-solid fa-trash"></i> Supprimer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTENU PRINCIPAL -->
+  <main class="container">
+
+    <!-- PAGE ACCUEIL -->
+    <section class="page active" id="page-accueil">
+
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fa-solid fa-coins"></i></div>
+          <div class="stat-label">Total des depenses</div>
+          <div class="stat-value" id="statTotal">0 F CFA</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fa-solid fa-receipt"></i></div>
+          <div class="stat-label">Nombre de depenses</div>
+          <div class="stat-value" id="statCount">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+          <div class="stat-label">Derniere depense</div>
+          <div class="stat-value" id="statLast">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fa-solid fa-fire"></i></div>
+          <div class="stat-label">Categorie la plus utilisee</div>
+          <div class="stat-value" id="statTopCat">--</div>
+        </div>
+      </div>
+
+      <div class="form-chart-grid">
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-plus-circle"></i> Ajouter une depense</div>
+          <form id="addForm" novalidate>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label" for="addTitre">Titre *</label>
+                <input type="text" id="addTitre" placeholder="Ex: Courses hebdomadaires" required>
+                <span class="form-error" id="addTitreError"></span>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="addMontant">Montant (FCFA) *</label>
+                <input type="number" id="addMontant" step="1" min="0" placeholder="0" required>
+                <span class="form-error" id="addMontantError"></span>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="addCategorie">Categorie *</label>
+                <select id="addCategorie" required>
+                  <option value="">Choisir une categorie</option>
+                </select>
+                <span class="form-error" id="addCategorieError"></span>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="addDate">Date *</label>
+                <input type="date" id="addDate" required>
+                <span class="form-error" id="addDateError"></span>
+              </div>
+              <div class="form-group full">
+                <label class="form-label" for="addDescription">Description (facultatif)</label>
+                <textarea id="addDescription" rows="2" placeholder="Details supplementaires..."></textarea>
+              </div>
+              <div class="form-group full">
+                <button type="submit" class="btn btn-primary" style="width:100%" id="addSubmitBtn">
+                  <i class="fa-solid fa-plus"></i> Ajouter la depense
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-chart-pie"></i> Repartition par categorie</div>
+          <div class="chart-container">
+            <canvas id="categoryChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:2rem">
+        <div class="card-title"><i class="fa-solid fa-magnifying-glass"></i> Rechercher et filtrer</div>
+        <div class="toolbar">
+          <div class="search-wrapper">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="searchInput" placeholder="Rechercher par titre ou categorie..." aria-label="Rechercher">
+          </div>
+          <select class="filter-select" id="filterCategory" aria-label="Filtrer par categorie">
+            <option value="">Toutes les categories</option>
+          </select>
+          <div class="filter-group">
+            <label for="filterDateFrom">Du</label>
+            <input type="date" id="filterDateFrom" class="filter-input">
+          </div>
+          <div class="filter-group">
+            <label for="filterDateTo">Au</label>
+            <input type="date" id="filterDateTo" class="filter-input">
+          </div>
+          <div class="filter-group">
+            <label for="filterAmountMin">Min</label>
+            <input type="number" id="filterAmountMin" class="filter-input" step="1" min="0" placeholder="0">
+          </div>
+          <div class="filter-group">
+            <label for="filterAmountMax">Max</label>
+            <input type="number" id="filterAmountMax" class="filter-input" step="1" min="0" placeholder="Max">
+          </div>
+          <select class="filter-select" id="sortOrder" aria-label="Ordre de tri">
+            <option value="date-desc">Date (recent)</option>
+            <option value="date-asc">Date (ancien)</option>
+            <option value="amount-desc">Montant (decroissant)</option>
+            <option value="amount-asc">Montant (croissant)</option>
+            <option value="title-asc">Titre (A-Z)</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="resetFilters()" aria-label="Reinitialiser les filtres">
+            <i class="fa-solid fa-rotate-left"></i> Reset
+          </button>
+        </div>
+        <div class="quick-filters">
+          <button class="quick-filter-btn active" data-period="all">Toutes</button>
+          <button class="quick-filter-btn" data-period="week">Cette semaine</button>
+          <button class="quick-filter-btn" data-period="month">Ce mois</button>
+          <button class="quick-filter-btn" data-period="quarter">Ce trimestre</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:2rem">
+        <div class="card-title" style="justify-content:space-between">
+          <span><i class="fa-solid fa-list"></i> Liste des depenses</span>
+          <div style="display:flex;gap:0.5rem">
+            <button class="btn btn-ghost btn-sm" onclick="exportCSV()" aria-label="Exporter en CSV">
+              <i class="fa-solid fa-file-csv"></i> CSV
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="exportPDF()" aria-label="Exporter en PDF">
+              <i class="fa-solid fa-file-pdf"></i> PDF
+            </button>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Titre</th>
+                <th>Montant</th>
+                <th>Categorie</th>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="expenseTableBody"></tbody>
+          </table>
+        </div>
+        <div id="emptyState" class="empty-state" style="display:none">
+          <i class="fa-solid fa-inbox"></i>
+          <p>Aucune depense trouvee</p>
+        </div>
+        <div class="pagination" id="pagination"></div>
+      </div>
+
+      <div class="calcs-grid" id="calcsGrid">
+        <div class="calc-card">
+          <div class="calc-label">Total depense</div>
+          <div class="calc-value" id="calcTotal">0 F CFA</div>
+        </div>
+        <div class="calc-card">
+          <div class="calc-label">Nombre de depenses</div>
+          <div class="calc-value" id="calcCount">0</div>
+        </div>
+        <div class="calc-card">
+          <div class="calc-label">Montant moyen</div>
+          <div class="calc-value" id="calcAvg">0 F CFA</div>
+        </div>
+        <div class="calc-card">
+          <div class="calc-label">Depense la plus elevee</div>
+          <div class="calc-value" id="calcMax" style="color:var(--red)">0 F CFA</div>
+        </div>
+        <div class="calc-card">
+          <div class="calc-label">Depense la plus faible</div>
+          <div class="calc-value" id="calcMin" style="color:var(--green)">0 F CFA</div>
+        </div>
+      </div>
+
+      <div class="top-grid">
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-clock"></i> Cinq dernieres depenses</div>
+          <div id="topLast"></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-arrow-up-wide-short"></i> Cinq plus grosses depenses</div>
+          <div id="topBiggest"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- PAGE A PROPOS -->
+    <section class="page" id="page-apropos">
+      <div class="page-hero">
+        <h1>A propos de MoneyTrack</h1>
+        <p>Une application moderne, rapide et securisee pour suivre toutes vos depenses personnelles au quotidien.</p>
+      </div>
+      <div class="about-content">
+        <h2>Pourquoi MoneyTrack ?</h2>
+        <p>MoneyTrack a ete concu pour offrir une experience de gestion financiere personnelle a la fois simple et puissante. Pas de fonctionnalites superflues, pas d'abonnement : juste un outil efficace pour comprendre ou va votre argent.</p>
+
+        <h2>Fonctionnalites principales</h2>
+        <ul class="feature-list">
+          <li><i class="fa-solid fa-check"></i> Ajout, modification et suppression de depenses</li>
+          <li><i class="fa-solid fa-check"></i> Recherche instantanee par titre ou categorie</li>
+          <li><i class="fa-solid fa-check"></i> Filtres avances (date, montant, categorie, tri)</li>
+          <li><i class="fa-solid fa-check"></i> Tableau de bord avec statistiques en temps reel</li>
+          <li><i class="fa-solid fa-check"></i> Graphique interactif de repartition par categorie</li>
+          <li><i class="fa-solid fa-check"></i> Export PDF et CSV de vos donnees</li>
+          <li><i class="fa-solid fa-check"></i> Mode sombre avec sauvegarde du choix</li>
+          <li><i class="fa-solid fa-check"></i> Design responsive et animations fluides</li>
+          <li><i class="fa-solid fa-check"></i> Pagination pour naviguer confortablement</li>
+          <li><i class="fa-solid fa-check"></i> Filtres rapides : semaine, mois, trimestre</li>
+        </ul>
+
+        <h2>Technologies</h2>
+        <p>Cette application utilise HTML5, CSS3 et JavaScript vanilla cote frontend, avec un backend Node.js / Express.js expose via une API REST, et une base de donnees MongoDB (Mongoose) pour la persistance des donnees.</p>
+
+        <h2>Categories disponibles</h2>
+        <p>Nourriture, Transport, Etudes, Loisirs, Factures, Sante, Shopping, Autres.</p>
+      </div>
+    </section>
+
+    <!-- PAGE CONTACT -->
+    <section class="page" id="page-contact">
+      <div class="page-hero">
+        <h1>Nous contacter</h1>
+        <p>Une question, une suggestion ou un bug ? N'hesitez pas a nous ecrire.</p>
+      </div>
+      <div class="contact-grid">
+        <div class="contact-card">
+          <i class="fa-solid fa-envelope"></i>
+          <h3>Email</h3>
+          <p>contact@moneytrack.app</p>
+        </div>
+        <div class="contact-card">
+          <i class="fa-solid fa-phone"></i>
+          <h3>Telephone</h3>
+          <p>+33 1 23 45 67 89</p>
+        </div>
+        <div class="contact-card">
+          <i class="fa-solid fa-location-dot"></i>
+          <h3>Adresse</h3>
+          <p>Paris, France</p>
+        </div>
+      </div>
+      <div class="card" style="max-width:600px;margin:0 auto 3rem">
+        <div class="card-title"><i class="fa-solid fa-paper-plane"></i> Envoyer un message</div>
+        <form id="contactForm" novalidate>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label" for="contactName">Nom *</label>
+              <input type="text" id="contactName" placeholder="Votre nom" required>
+              <span class="form-error" id="contactNameError"></span>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="contactEmail">Email *</label>
+              <input type="email" id="contactEmail" placeholder="votre@email.com" required>
+              <span class="form-error" id="contactEmailError"></span>
+            </div>
+            <div class="form-group full">
+              <label class="form-label" for="contactMessage">Message *</label>
+              <textarea id="contactMessage" rows="4" placeholder="Votre message..." required></textarea>
+              <span class="form-error" id="contactMessageError"></span>
+            </div>
+            <div class="form-group full">
+              <button type="submit" class="btn btn-primary" style="width:100%">
+                <i class="fa-solid fa-paper-plane"></i> Envoyer
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- PAGE 404 -->
+    <section class="page" id="page-404">
+      <div class="page-hero">
+        <div class="not-found-icon"><i class="fa-solid fa-ghost"></i></div>
+        <h1>Page introuvable</h1>
+        <p>La page que vous recherchez n'existe pas ou a ete deplacee.</p>
+        <br>
+        <button class="btn btn-primary" onclick="navigateTo('accueil')">
+          <i class="fa-solid fa-house"></i> Retour a l'accueil
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer>
+    <p>&copy; 2026 <span>MoneyTrack</span> — Gestion de depenses personnelles. Tous droits reserves.</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
